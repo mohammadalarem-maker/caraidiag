@@ -21,8 +21,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnSend: Button
     private val client = OkHttpClient()
     
-    // ضع مفتاح الـ API الخاص بك هنا
-    private val apiKey = "_SECURE_GEMINI_KEY_"
+    // سيقوم خادم جيت هاب بحقن المفتاح هنا تلقائياً أثناء البناء
+    private val apiKey = "_SECURE_GEMINI_KEY_" 
     private val apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey"
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -69,13 +69,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun processDiagnostics(userMessage: String) {
-        // رسالة مؤقتة تظهر للمنتظر أثناء جلب البيانات من السيرفر
         addMessageToChat("جاري الاتصال بالذكاء الاصطناعي وتحليل العَرَض الفني...", false)
 
-        // بناء الـ Prompt وهندسته ليعطي إجابة ميكانيكية وكهربائية دقيقة ومنهجية
         val systemPrompt = "أنت مهندس وخبير محترف في كهرباء وميكانيك السيارات. قم بتحليل العَرَض التالي وأعطِ الفني خطوات فحص منهجية مرتبة واستبعد الاحتمالات من الأسهل للأعقد. العَرَض: $userMessage"
 
-        // تجهيز جسم الطلب بصيغة JSON لـ Gemini API
         val jsonMediaType = "application/json; charset=utf-8".toMediaType()
         val jsonBody = """
             {
@@ -90,8 +87,8 @@ class MainActivity : AppCompatActivity() {
             .post(jsonBody.toRequestBody(jsonMediaType))
             .build()
 
-        // إرسال الطلب عبر شبكة الإنترنت بشكل غير متزامن لعدم تجميد واجهة التطبيق
-        client.newCall(request).enqueue(object : Callback) {
+        // تمرير الـ Callback بالشكل الصحيح هندسياً وإغلاق الأقواس بدقة
+        client.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
                 addMessageToChat("فشل الاتصال بالشبكة: ${e.message}.. تحقق من الإنترنت.", false)
             }
@@ -106,12 +103,11 @@ class MainActivity : AppCompatActivity() {
                     val responseData = response.body?.string()
                     if (responseData != null) {
                         try {
-                            // تفكيك الـ JSON وجلب النص التشخيصي الناتجة عن النموذج
                             val jsonObject = JSONObject(responseData)
                             val candidates = jsonObject.getJSONArray("candidates")
                             val firstCandidate = candidates.getJSONObject(0)
-                            val content = firstCandidate.getJSONObject(content)
-                            val parts = content.getJSONArray("parts")
+                            val contentObj = firstCandidate.getJSONObject("content")
+                            val parts = contentObj.getJSONArray("parts")
                             val aiResponse = parts.getJSONObject(0).getString("text")
                             
                             addMessageToChat(aiResponse, false)
