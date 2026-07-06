@@ -22,7 +22,7 @@ class MainActivity : AppCompatActivity() {
     private val client = OkHttpClient()
     
     private val apiKey = "_SECURE_GEMINI_KEY_" 
-    private val apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey"
+    private val apiUrl = "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=$apiKey"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
