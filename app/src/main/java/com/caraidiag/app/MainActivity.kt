@@ -1,46 +1,141 @@
 package com.caraidiag.app
 
 import android.graphics.Color
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.view.Gravity
-import android.widget.Button
-import android.widget.EditText
-import android.widget.LinearLayout
-import android.widget.TextView
+import android.view.View
+import android.view.ViewGroup
+import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
 
 class MainActivity : AppCompatActivity() {
 
+    private lateinit var scrollView: ScrollView
     private lateinit var chatContainer: LinearLayout
     private lateinit var inputMessage: EditText
     private lateinit var btnSend: Button
     private val client = OkHttpClient()
     
-    // سيقوم جيت هاب بحقن المفتاح هنا تلقائياً
+    // سيقوم جيت هاب بحقن مفتاحك الآمن هنا تلقائياً أثناء البناء
     private val apiKey = "_SECURE_GEMINI_KEY_" 
     private val apiUrl = "https://api.groq.com/openai/v1/chat/completions"
+    
+    // حفظ تاريخ المحادثة التفاعلية لإرسالها بالكامل مع كل طلب ليعرف الذكاء الاصطناعي الإجابات السابقة
+    private val conversationalHistory = JSONArray()
 
-    override fun onCreate(savedInstanceState: Bundle?) {
+        override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
+        
+        // بناء الواجهة برمجياً 100% لضمان التحديث الجمالي الفوري وحل مشكلة التمرير بدون تعديل ملفات XML
+        val rootLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.parseColor("#F8FAFC")) // خلفية مريحة وعصرية
+        }
 
-        chatContainer = findViewById(R.id.chatContainer)
-        inputMessage = findViewById(R.id.inputMessage)
-        btnSend = findViewById(R.id.btnSend)
+        // 1. شريط العنوان العلوي (Header) بتصميم أنيق وهادئ
+        val headerBar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setBackgroundColor(Color.parseColor("#1E293B"))
+            setPadding(32, 40, 32, 40)
+            elevation = 8f
+            gravity = Gravity.CENTER
+        }
+        val headerTitle = TextView(this).apply {
+            text = "مساعد فحص وتشخيص السيارات الذكي"
+            setTextColor(Color.WHITE)
+            textSize = 17f
+            typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+        }
+        headerBar.addView(headerTitle)
+        rootLayout.addView(headerBar)
 
-        addMessageToChat("مرحباً بك في نظام التشخيص المدعوم بمحرك Llama 3 السريع. اكتب نوع السيارة والعَرَض الفني للبدء فوراً.", false)
+        // 2. منطقة عرض المحادثة مع تفعيل التمرير التلقائي لأسفل (ScrollView)
+        scrollView = ScrollView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                0,
+                1f
+            )
+            isFillViewport = true
+        }
+        chatContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(24, 24, 24, 24)
+        }
+        scrollView.addView(chatContainer)
+        rootLayout.addView(scrollView)
+
+        // 3. شريط الإدخال السفلي بتصميم دائري متطابق مع واجهات جمني الحديثة
+        val bottomBar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setBackgroundColor(Color.WHITE)
+            setPadding(24, 20, 24, 20)
+            gravity = Gravity.CENTER_VERTICAL
+            elevation = 16f
+        }
+
+        inputMessage = EditText(this).apply {
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                rightMargin = 16
+            }
+            hint = "اكتب العَرَض أو نتيجة الفحص..."
+            setHintTextColor(Color.parseColor("#94A3B8"))
+            setTextColor(Color.parseColor("#1E293B"))
+            textSize = 15f
+            setPadding(36, 28, 36, 28)
+            
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                setColor(Color.parseColor("#F1F5F9"))
+                cornerRadius = 45f
+            }
+        }
+
+        btnSend = Button(this).apply {
+            text = "إرسال"
+            setTextColor(Color.WHITE)
+            textSize = 14f
+            typeface = Typeface.DEFAULT_BOLD
+            setPadding(44, 0, 44, 0)
+            
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                setColor(Color.parseColor("#1A73E8")) // لون جمني الأزرق القياسي
+                cornerRadius = 45f
+            }
+        }
+
+        bottomBar.addView(inputMessage)
+        bottomBar.addView(btnSend)
+        rootLayout.addView(bottomBar)
+
+        setContentView(rootLayout)
+
+        // الرسالة الترحيبية المنهجية الأولى للسيستم الفني
+        addMessageToChat("مرحباً بك يا هندسة. أنا مساعدك الفني الذكي. يرجى كتابة عَرَض السيارة أو المشكلة الحاصلة باختصار، وسأقوم بفحصها معك خطوة بخطوة لاستبعاد الاحتمالات وتحديد الخلل بدقة.", false)
 
         btnSend.setOnClickListener {
             val message = inputMessage.text.toString().trim()
             if (message.isNotEmpty()) {
                 addMessageToChat(message, true)
                 inputMessage.text.clear()
-                processDiagnostics(message)
+                
+                // حفظ رسالة المستخدم في السجل لضمان ترابط الأفكار
+                val userLog = JSONObject().apply {
+                    put("role", "user")
+                    put("content", message)
+                }
+                conversationalHistory.put(userLog)
+                
+                processDiagnostics()
             }
         }
     }
@@ -50,9 +145,17 @@ class MainActivity : AppCompatActivity() {
             val textView = TextView(this).apply {
                 text = message
                 textSize = 15f
-                setPadding(24, 16, 24, 16)
-                setTextColor(if (isUser) Color.WHITE else Color.parseColor("#0F172A"))
+                setPadding(38, 26, 38, 26)
+                setTextColor(Color.parseColor(if (isUser) "#041E49" else "#1E293B"))
+                setTextIsSelectable(true) // جعل النص قابلاً للنسخ والتحديد الكامل بكل سهولة
                 
+                // تصميم فقاعات انسيابية مثل جمني تماماً
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.RECTANGLE
+                    setColor(Color.parseColor(if (isUser) "#E9F1FE" else "#F1F3F4"))
+                    cornerRadius = 36f
+                }
+
                 val params = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT
@@ -60,29 +163,43 @@ class MainActivity : AppCompatActivity() {
                     topMargin = 12
                     bottomMargin = 12
                     gravity = if (isUser) Gravity.END else Gravity.START
+                    // تحديد أقصى عرض للفقاعة لتبقى متناسقة
+                    maxWidth = (resources.displayMetrics.widthPixels * 0.78).toInt()
                 }
                 layoutParams = params
-                setBackgroundColor(if (isUser) Color.parseColor("#2563EB") else Color.parseColor("#E2E8F0"))
             }
+            
             chatContainer.addView(textView)
+            
+            // الحل الجذري لمشكلة التمرير: قفز الشاشة لأسفل فوراً عند ظهور أي رسالة
+            scrollView.post {
+                scrollView.fullScroll(View.FOCUS_DOWN)
+            }
         }
     }
 
-    private fun processDiagnostics(userMessage: String) {
-        addMessageToChat("جاري الاتصال بمحرك الفحص الذكي وتوليد التقرير...", false)
+    private fun processDiagnostics() {
+        addMessageToChat("جاري التحليل الفني للخطوة الحالية...", false)
 
-        val systemPrompt = "أنت مهندس وخبير محترف في كهرباء وميكانيك السيارات. قم بتحليل العَرَض التالي وأعطِ الفني خطوات فحص منهجية مرتبة واستبعد الاحتمالات من الأسهل للأعقد. العَرَض: $userMessage"
+        val jsonPayloadArray = JSONArray()
+        
+        // هندسة الأوامر (Prompt Engineering) لإجبار النموذج على أسلوب "سؤال وجواب خطوة بخطوة وبإيجاز شديد"
+        val systemPromptObj = JSONObject().apply {
+            put("role", "system")
+            put("content", "أنت مهندس وخبير محترف في كهرباء وميكانيك السيارات. وظيفتك هي تشخيص أعطال السيارات مع الفني خطوة بخطوة بنظام تفاعلي صارم (سؤال وجواب). اتبع القواعد التالية بدقة متناهية: 1. لا تعطي قوائم احتمالات أو نشرات طويلة أو نصائح متعددة في نفس الرسالة نهائياً. 2. ركز على عَرَض واحد واطرح سؤالاً واحداً فقط ومحدداً ومختصراً جداً في كل مرة بناءً على سياق الشكوى وإجابات المستخدم السابقة (مثال: إذا قال السيارة لا تشتغل، اسأله أولاً: هل أنوار الطبلون قوية والبطارية مشحونة؟ ثم انتظر إجابته). 3. عندما يجيبك، انتقل للسؤال الفني التالي بالتدريج (مثل: هل السلف يدق أم لا؟) وهكذا حتى تصل للخلل. 4. اجعل ردودك مقتضبة جداً ومفيدة ومباشرة وبصيغة مهنية واضحة باللغة العربية.")
+        }
+        jsonPayloadArray.put(systemPromptObj)
 
-        // بناء الـ JSON القياسي المتوافق مع Groq / OpenAI
+        // دمج تاريخ المحادثة بالكامل ليتذكر الموديل الردود السابقة بدقة
+        for (i in 0 until conversationalHistory.length()) {
+            jsonPayloadArray.put(conversationalHistory.getJSONObject(i))
+        }
+
         val jsonMediaType = "application/json; charset=utf-8".toMediaType()
-        val jsonBody = """
-            {
-                "model": "llama-3.1-8b-instant",
-                "messages": [
-                    {"role": "system", "content": "$systemPrompt"}
-                ]
-            }
-        """.trimIndent()
+        val jsonBody = JSONObject().apply {
+            put("model", "llama-3.1-8b-instant")
+            put("messages", jsonPayloadArray)
+        }.toString()
 
         val request = Request.Builder()
             .url(apiUrl)
@@ -93,32 +210,49 @@ class MainActivity : AppCompatActivity() {
 
         client.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
+                removeLastMessage()
                 addMessageToChat("فشل اتصال بالشبكة: ${e.message}", false)
             }
 
             override fun onResponse(call: Call, response: Response) {
                 response.use {
+                    removeLastMessage()
                     val responseData = response.body?.string() ?: "استجابة فارغة"
                     
                     if (!response.isSuccessful) {
-                        addMessageToChat("رد السيرفر الرسمي (كود ${response.code}):\n$responseData", false)
+                        addMessageToChat("خطأ من السيرفر: كود ${response.code}", false)
                         return
                     }
                     
                     try {
-                        // تفكيك الـ JSON القياسي لنظام كوشيس / OpenAI
                         val jsonObject = JSONObject(responseData)
                         val choices = jsonObject.getJSONArray("choices")
                         val firstChoice = choices.getJSONObject(0)
                         val messageObj = firstChoice.getJSONObject("message")
                         val aiResponse = messageObj.getString("content")
                         
+                        // حفظ رد الذكاء الاصطناعي في التاريخ ليعتمد عليه في الخطوة القادمة
+                        val aiLog = JSONObject().apply {
+                            put("role", "assistant")
+                            put("content", aiResponse)
+                        }
+                        conversationalHistory.put(aiLog)
+                        
                         addMessageToChat(aiResponse, false)
                     } catch (e: Exception) {
-                        addMessageToChat("خطأ معالجة داخلي: ${e.message}\nالرد الأصلي:\n$responseData", false)
+                        addMessageToChat("خطأ معالجة داخلي في عرض الرد.", false)
                     }
                 }
             }
         })
+    }
+
+    private fun removeLastMessage() {
+        runOnUiThread {
+            val childCount = chatContainer.childCount
+            if (childCount > 0) {
+                chatContainer.removeViewAt(childCount - 1)
+            }
+        }
     }
 }
