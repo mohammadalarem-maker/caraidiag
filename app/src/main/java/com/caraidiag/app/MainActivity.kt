@@ -77,7 +77,7 @@ class MainActivity : AppCompatActivity() {
         val jsonMediaType = "application/json; charset=utf-8".toMediaType()
         val jsonBody = """
             {
-                "model": "llama3-8b-8192",
+                "model": "llama-3.1-8b-instant",
                 "messages": [
                     {"role": "system", "content": "$systemPrompt"}
                 ]
