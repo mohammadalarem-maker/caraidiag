@@ -23,6 +23,10 @@ jobs:
       with:
         gradle-version: '8.5'
 
+    - name: Inject Secure Gemini API Key
+      run: |
+        sed -i "s#_SECURE_GEMINI_KEY_#${{ secrets.GEMINI_API_KEY }}#g" app/src/main/java/com/caraidiag/app/MainActivity.kt
+
     - name: Build APK with Gradle
       run: gradle assembleDebug
 

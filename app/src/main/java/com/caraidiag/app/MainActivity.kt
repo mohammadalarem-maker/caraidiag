@@ -9,6 +9,9 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import okhttp3.*
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
 import java.io.IOException
 
 class MainActivity : AppCompatActivity() {
@@ -17,34 +20,31 @@ class MainActivity : AppCompatActivity() {
     private lateinit var inputMessage: EditText
     private lateinit var btnSend: Button
     private val client = OkHttpClient()
+    
+    // ضع مفتاح الـ API الخاص بك هنا
+    private val apiKey = "_SECURE_GEMINI_KEY_"
+    private val apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // ربط العناصر البرمجية بالواجهة الرسومية XML
         chatContainer = findViewById(R.id.chatContainer)
         inputMessage = findViewById(R.id.inputMessage)
         btnSend = findViewById(R.id.btnSend)
 
-        // رسالة ترحيبية منهجية تظهر فور فتح التطبيق لتوجيه الفني أو المستخدم
         addMessageToChat("مرحباً بك في نظام التشخيص النيتف المحترف. يرجى كتابة نوع السيارة، والأعراض الحاصلة (مثل: تفتفة، تأخر تشغيل، لمبة محرك) لبدء التحليل واستبعاد الاحتمالات خطوة بخطوة.", false)
 
-        // حدث الضغط على زر الإرسال
         btnSend.setOnClickListener {
             val message = inputMessage.text.toString().trim()
             if (message.isNotEmpty()) {
-                // 1. إضافة رسالة المستخدم للواجهة
                 addMessageToChat(message, true)
                 inputMessage.text.clear()
-                
-                // 2. إرسال العَرَض للذكاء الاصطناعي ومعالجته
                 processDiagnostics(message)
             }
         }
     }
 
-    // دالة بناء وتوليد فقاعات المحادثة برمجياً وديناميكياً لضمان الخفة والسرعة
     private fun addMessageToChat(message: String, isUser: Boolean) {
         runOnUiThread {
             val textView = TextView(this).apply {
@@ -62,17 +62,65 @@ class MainActivity : AppCompatActivity() {
                     gravity = if (isUser) Gravity.END else Gravity.START
                 }
                 layoutParams = params
-                
-                // تصميم خلفية الفقاعة (أزرق للمستخدم ورمادي للمساعد)
                 setBackgroundColor(if (isUser) Color.parseColor("#2563EB") else Color.parseColor("#E2E8F0"))
             }
             chatContainer.addView(textView)
         }
     }
 
-    // الدالة المسؤولة عن معالجة التشخيص وأمر الربط بـ الـ API لاحقاً
     private fun processDiagnostics(userMessage: String) {
-        // رسالة مؤقتة لمحاكاة الفحص السريع حتى نقوم بربط الـ API في الخطوة التالية
-        addMessageToChat("جاري تحليل العَرَض برمجياً... يرجى التحقق من ضغط الوقود والفيوزات المرتبطة كخطوة أولية.", false)
+        // رسالة مؤقتة تظهر للمنتظر أثناء جلب البيانات من السيرفر
+        addMessageToChat("جاري الاتصال بالذكاء الاصطناعي وتحليل العَرَض الفني...", false)
+
+        // بناء الـ Prompt وهندسته ليعطي إجابة ميكانيكية وكهربائية دقيقة ومنهجية
+        val systemPrompt = "أنت مهندس وخبير محترف في كهرباء وميكانيك السيارات. قم بتحليل العَرَض التالي وأعطِ الفني خطوات فحص منهجية مرتبة واستبعد الاحتمالات من الأسهل للأعقد. العَرَض: $userMessage"
+
+        // تجهيز جسم الطلب بصيغة JSON لـ Gemini API
+        val jsonMediaType = "application/json; charset=utf-8".toMediaType()
+        val jsonBody = """
+            {
+                "contents": [{
+                    "parts": [{"text": "$systemPrompt"}]
+                }]
+            }
+        """.trimIndent()
+
+        val request = Request.Builder()
+            .url(apiUrl)
+            .post(jsonBody.toRequestBody(jsonMediaType))
+            .build()
+
+        // إرسال الطلب عبر شبكة الإنترنت بشكل غير متزامن لعدم تجميد واجهة التطبيق
+        client.newCall(request).enqueue(object : Callback) {
+            override fun onFailure(call: Call, e: IOException) {
+                addMessageToChat("فشل الاتصال بالشبكة: ${e.message}.. تحقق من الإنترنت.", false)
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                response.use {
+                    if (!response.isSuccessful) {
+                        addMessageToChat("خطأ من خادم الذكاء الاصطناعي. تأكد من صحة مفتاح الـ API.", false)
+                        return
+                    }
+                    
+                    val responseData = response.body?.string()
+                    if (responseData != null) {
+                        try {
+                            // تفكيك الـ JSON وجلب النص التشخيصي الناتجة عن النموذج
+                            val jsonObject = JSONObject(responseData)
+                            val candidates = jsonObject.getJSONArray("candidates")
+                            val firstCandidate = candidates.getJSONObject(0)
+                            val content = firstCandidate.getJSONObject(content)
+                            val parts = content.getJSONArray("parts")
+                            val aiResponse = parts.getJSONObject(0).getString("text")
+                            
+                            addMessageToChat(aiResponse, false)
+                        } catch (e: Exception) {
+                            addMessageToChat("حدث خطأ أثناء معالجة البيانات التشخيصية.", false)
+                        }
+                    }
+                }
+            }
+        })
     }
 }
