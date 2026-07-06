@@ -21,8 +21,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnSend: Button
     private val client = OkHttpClient()
     
+    // سيقوم جيت هاب بحقن المفتاح هنا تلقائياً
     private val apiKey = "_SECURE_GEMINI_KEY_" 
-    private val apiUrl = "https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=$apiKey"
+    private val apiUrl = "https://api.groq.com/openai/v1/chat/completions"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -32,7 +33,7 @@ class MainActivity : AppCompatActivity() {
         inputMessage = findViewById(R.id.inputMessage)
         btnSend = findViewById(R.id.btnSend)
 
-        addMessageToChat("مرحباً بك. نظام كشف الأخطاء الموسّع مفعّل الآن لمعرفة سبب عدم استجابة السيرفر بدقة.", false)
+        addMessageToChat("مرحباً بك في نظام التشخيص المدعوم بمحرك Llama 3 السريع. اكتب نوع السيارة والعَرَض الفني للبدء فوراً.", false)
 
         btnSend.setOnClickListener {
             val message = inputMessage.text.toString().trim()
@@ -68,46 +69,49 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun processDiagnostics(userMessage: String) {
-        addMessageToChat("جاري الاتصال واستخلاص كود الاستجابة الفعلي...", false)
+        addMessageToChat("جاري الاتصال بمحرك الفحص الذكي وتوليد التقرير...", false)
 
-        val systemPrompt = "أنت مهندس ميكانيك. حلل: $userMessage"
+        val systemPrompt = "أنت مهندس وخبير محترف في كهرباء وميكانيك السيارات. قم بتحليل العَرَض التالي وأعطِ الفني خطوات فحص منهجية مرتبة واستبعد الاحتمالات من الأسهل للأعقد. العَرَض: $userMessage"
 
+        // بناء الـ JSON القياسي المتوافق مع Groq / OpenAI
         val jsonMediaType = "application/json; charset=utf-8".toMediaType()
         val jsonBody = """
             {
-                "contents": [{
-                    "parts": [{"text": "$systemPrompt"}]
-                }]
+                "model": "llama3-8b-8192",
+                "messages": [
+                    {"role": "system", "content": "$systemPrompt"}
+                ]
             }
         """.trimIndent()
 
         val request = Request.Builder()
             .url(apiUrl)
+            .header("Authorization", "Bearer $apiKey")
+            .header("Content-Type", "application/json")
             .post(jsonBody.toRequestBody(jsonMediaType))
             .build()
 
         client.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
-                addMessageToChat("فشل اتصال بالشبكة تماماً: ${e.message}", false)
+                addMessageToChat("فشل اتصال بالشبكة: ${e.message}", false)
             }
 
             override fun onResponse(call: Call, response: Response) {
                 response.use {
                     val responseData = response.body?.string() ?: "استجابة فارغة"
                     
-                    // إذا فشل الطلب، سنعرض الكود والرد القادم من جوجل بالكامل
                     if (!response.isSuccessful) {
                         addMessageToChat("رد السيرفر الرسمي (كود ${response.code}):\n$responseData", false)
                         return
                     }
                     
                     try {
+                        // تفكيك الـ JSON القياسي لنظام كوشيس / OpenAI
                         val jsonObject = JSONObject(responseData)
-                        val candidates = jsonObject.getJSONArray("candidates")
-                        val firstCandidate = candidates.getJSONObject(0)
-                        val contentObj = firstCandidate.getJSONObject("content")
-                        val parts = contentObj.getJSONArray("parts")
-                        val aiResponse = parts.getJSONObject(0).getString("text")
+                        val choices = jsonObject.getJSONArray("choices")
+                        val firstChoice = choices.getJSONObject(0)
+                        val messageObj = firstChoice.getJSONObject("message")
+                        val aiResponse = messageObj.getString("content")
                         
                         addMessageToChat(aiResponse, false)
                     } catch (e: Exception) {
