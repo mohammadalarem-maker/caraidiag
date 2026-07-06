@@ -21,7 +21,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnSend: Button
     private val client = OkHttpClient()
     
-    // سيقوم خادم جيت هاب بحقن المفتاح هنا تلقائياً أثناء البناء
     private val apiKey = "_SECURE_GEMINI_KEY_" 
     private val apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey"
 
@@ -33,7 +32,7 @@ class MainActivity : AppCompatActivity() {
         inputMessage = findViewById(R.id.inputMessage)
         btnSend = findViewById(R.id.btnSend)
 
-        addMessageToChat("مرحباً بك في نظام التشخيص النيتف المحترف. يرجى كتابة نوع السيارة، والأعراض الحاصلة (مثل: تفتفة، تأخر تشغيل، لمبة محرك) لبدء التحليل واستبعاد الاحتمالات خطوة بخطوة.", false)
+        addMessageToChat("مرحباً بك. نظام كشف الأخطاء الموسّع مفعّل الآن لمعرفة سبب عدم استجابة السيرفر بدقة.", false)
 
         btnSend.setOnClickListener {
             val message = inputMessage.text.toString().trim()
@@ -69,9 +68,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun processDiagnostics(userMessage: String) {
-        addMessageToChat("جاري الاتصال بالذكاء الاصطناعي وتحليل العَرَض الفني...", false)
+        addMessageToChat("جاري الاتصال واستخلاص كود الاستجابة الفعلي...", false)
 
-        val systemPrompt = "أنت مهندس وخبير محترف في كهرباء وميكانيك السيارات. قم بتحليل العَرَض التالي وأعطِ الفني خطوات فحص منهجية مرتبة واستبعد الاحتمالات من الأسهل للأعقد. العَرَض: $userMessage"
+        val systemPrompt = "أنت مهندس ميكانيك. حلل: $userMessage"
 
         val jsonMediaType = "application/json; charset=utf-8".toMediaType()
         val jsonBody = """
@@ -87,33 +86,32 @@ class MainActivity : AppCompatActivity() {
             .post(jsonBody.toRequestBody(jsonMediaType))
             .build()
 
-        // تمرير الـ Callback بالشكل الصحيح هندسياً وإغلاق الأقواس بدقة
         client.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
-                addMessageToChat("فشل الاتصال بالشبكة: ${e.message}.. تحقق من الإنترنت.", false)
+                addMessageToChat("فشل اتصال بالشبكة تماماً: ${e.message}", false)
             }
 
             override fun onResponse(call: Call, response: Response) {
                 response.use {
+                    val responseData = response.body?.string() ?: "استجابة فارغة"
+                    
+                    // إذا فشل الطلب، سنعرض الكود والرد القادم من جوجل بالكامل
                     if (!response.isSuccessful) {
-                        addMessageToChat("خطأ من خادم الذكاء الاصطناعي. تأكد من صحة مفتاح الـ API.", false)
+                        addMessageToChat("رد السيرفر الرسمي (كود ${response.code}):\n$responseData", false)
                         return
                     }
                     
-                    val responseData = response.body?.string()
-                    if (responseData != null) {
-                        try {
-                            val jsonObject = JSONObject(responseData)
-                            val candidates = jsonObject.getJSONArray("candidates")
-                            val firstCandidate = candidates.getJSONObject(0)
-                            val contentObj = firstCandidate.getJSONObject("content")
-                            val parts = contentObj.getJSONArray("parts")
-                            val aiResponse = parts.getJSONObject(0).getString("text")
-                            
-                            addMessageToChat(aiResponse, false)
-                        } catch (e: Exception) {
-                            addMessageToChat("حدث خطأ أثناء معالجة البيانات التشخيصية.", false)
-                        }
+                    try {
+                        val jsonObject = JSONObject(responseData)
+                        val candidates = jsonObject.getJSONArray("candidates")
+                        val firstCandidate = candidates.getJSONObject(0)
+                        val contentObj = firstCandidate.getJSONObject("content")
+                        val parts = contentObj.getJSONArray("parts")
+                        val aiResponse = parts.getJSONObject(0).getString("text")
+                        
+                        addMessageToChat(aiResponse, false)
+                    } catch (e: Exception) {
+                        addMessageToChat("خطأ معالجة داخلي: ${e.message}\nالرد الأصلي:\n$responseData", false)
                     }
                 }
             }
