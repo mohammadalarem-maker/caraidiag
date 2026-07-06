@@ -1,5 +1,6 @@
 package com.caraidiag.app
 
+import android.content.Context
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -7,6 +8,7 @@ import android.os.Bundle
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.view.inputmethod.InputMethodManager
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import okhttp3.*
@@ -28,19 +30,18 @@ class MainActivity : AppCompatActivity() {
     private val apiKey = "_SECURE_GEMINI_KEY_" 
     private val apiUrl = "https://api.groq.com/openai/v1/chat/completions"
     
-    // حفظ تاريخ المحادثة التفاعلية لإرسالها بالكامل مع كل طلب ليعرف الذكاء الاصطناعي الإجابات السابقة
+    // حفظ تاريخ المحادثة التفاعلية لترابط التشخيص
     private val conversationalHistory = JSONArray()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // بناء الواجهة برمجياً 100% لضمان التحديث الجمالي الفوري وحل مشكلة التمرير بدون تعديل ملفات XML
         val rootLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.parseColor("#F8FAFC")) // خلفية مريحة وعصرية
+            setBackgroundColor(Color.parseColor("#F8FAFC"))
         }
 
-        // 1. شريط العنوان العلوي (Header) بتصميم أنيق وهادئ
+        // 1. شريط العنوان العلوي (Header)
         val headerBar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             setBackgroundColor(Color.parseColor("#1E293B"))
@@ -57,7 +58,7 @@ class MainActivity : AppCompatActivity() {
         headerBar.addView(headerTitle)
         rootLayout.addView(headerBar)
 
-        // 2. منطقة عرض المحادثة مع تفعيل التمرير التلقائي لأسفل (ScrollView)
+        // 2. منطقة عرض المحادثة (ScrollView)
         scrollView = ScrollView(this).apply {
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -73,7 +74,7 @@ class MainActivity : AppCompatActivity() {
         scrollView.addView(chatContainer)
         rootLayout.addView(scrollView)
 
-        // 3. شريط الإدخال السفلي بتصميم دائري متطابق مع واجهات جمني الحديثة
+        // 3. شريط الإدخال السفلي بتصميم جمني
         val bottomBar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             setBackgroundColor(Color.WHITE)
@@ -106,9 +107,13 @@ class MainActivity : AppCompatActivity() {
             typeface = Typeface.DEFAULT_BOLD
             setPadding(44, 0, 44, 0)
             
+            // حل مشكلة الانبت الجذري: منع الزر من أخذ التركيز نهائياً عند الضغط عليه
+            isFocusable = false
+            isFocusableInTouchMode = false
+            
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
-                setColor(Color.parseColor("#1A73E8")) // لون جمني الأزرق القياسي
+                setColor(Color.parseColor("#1A73E8"))
                 cornerRadius = 45f
             }
         }
@@ -119,8 +124,8 @@ class MainActivity : AppCompatActivity() {
 
         setContentView(rootLayout)
 
-        // الرسالة الترحيبية المنهجية الأولى للسيستم الفني
-        addMessageToChat("مرحباً بك يا هندسة في نظام الفحص المنهجي. يرجى كتابة المشكلة الحاصلة في السيارة للبدء في تتبعها خطوة بخطوة.", false)
+        // الرسالة الترحيبية الأولى
+        addMessageToChat("مرحباً بك يا هندسة. أنا مساعدك الفني لتتبع الأعطال خطوة بخطوة. اكتب المشكلة الحاصلة في السيارة لنبدأ في تحليلها فوراً.", false)
 
         btnSend.setOnClickListener {
             val message = inputMessage.text.toString().trim()
@@ -128,10 +133,13 @@ class MainActivity : AppCompatActivity() {
                 addMessageToChat(message, true)
                 inputMessage.text.clear()
                 
-                // تفعيل حقل الإدخال فوراً وإبقائه نشطاً للكتابة المستمرة دون الحاجة للضغط عليه مجدداً
+                // إعادة التركيز فوراً إلى حقل الإدخال
                 inputMessage.requestFocus()
                 
-                // حفظ رسالة المستخدم في السجل لضمان ترابط الأفكار
+                // إجبار الكيبورد على البقاء مفتوحاً ونشطاً للكتابة المستمرة
+                val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+                imm.showSoftInput(inputMessage, InputMethodManager.SHOW_IMPLICIT)
+                
                 val userLog = JSONObject().apply {
                     put("role", "user")
                     put("content", message)
@@ -150,9 +158,8 @@ class MainActivity : AppCompatActivity() {
                 textSize = 15f
                 setPadding(38, 26, 38, 26)
                 setTextColor(Color.parseColor(if (isUser) "#041E49" else "#1E293B"))
-                setTextIsSelectable(true) // جعل النص قابلاً للنسخ والتحديد الكامل بكل سهولة
+                setTextIsSelectable(true) // الرسائل قابلة للنسخ والتحديد
                 
-                // تصميم فقاعات انسيابية مثل جمني تماماً
                 background = GradientDrawable().apply {
                     shape = GradientDrawable.RECTANGLE
                     setColor(Color.parseColor(if (isUser) "#E9F1FE" else "#F1F3F4"))
@@ -166,7 +173,6 @@ class MainActivity : AppCompatActivity() {
                     topMargin = 12
                     bottomMargin = 12
                     gravity = if (isUser) Gravity.END else Gravity.START
-                    // تحديد أقصى عرض للفقاعة لتبقى متناسقة
                     maxWidth = (resources.displayMetrics.widthPixels * 0.78).toInt()
                 }
                 layoutParams = params
@@ -174,26 +180,29 @@ class MainActivity : AppCompatActivity() {
             
             chatContainer.addView(textView)
             
-            // الحل الجذري لمشكلة التمرير: قفز الشاشة لأسفل فوراً عند ظهور أي رسالة
+            // التمرير التلقائي الفوري لأسفل الشاشة
             scrollView.post {
                 scrollView.fullScroll(View.FOCUS_DOWN)
+                // تأكيد إضافي لبقاء حقل الإدخال فعالاً بعد التمرير
+                if (isUser) {
+                    inputMessage.requestFocus()
+                }
             }
         }
     }
 
     private fun processDiagnostics() {
-        addMessageToChat("جاري تحليل الخطوة الحالية بفحص هندسي...", false)
+        addMessageToChat("جاري تحليل المعطيات هندسياً...", false)
 
         val jsonPayloadArray = JSONArray()
         
-        // هندسة الأوامر الصارمة لتحويل الشات إلى شجرة تشخيص فنية تمنع العشوائية والتخمين
+        // تعديل هندسة الأوامر لفرض التحليل الهندسي وضبط اللهجة الفنية البيضاء
         val systemPromptObj = JSONObject().apply {
             put("role", "system")
-            put("content", "أنت مهندس تشخيص أعطال وخبير محترف في كهرباء وميكانيك السيارات (Diagnostic Master). وضيفتك هي قيادة الفني عبر شجرة تشخيص هندسية صارمة ومنع التخمين العشوائي تماماً. التزم بالقواعد التالية بالملي: 1. ممنوع تخمين العطل أو تقديم حلول نهائية أو سرد احتمالات متعددة من البداية. 2. إذا كانت هذه أول شكوى من المستخدم ولم يذكر تفاصيل السيارة، يجب أن تسأله فوراً وسؤالاً وحيداً: (ما هو نوع وموديل السيارة؟ وهل هناك أكواد عطل DTC أو لمبة تشيك إنجن ظاهرة بجهاز الفحص؟). 3. تتبع العطل بناءً على المنطق المنهجي: ابدأ دائماً بالتحقق من دوائر التغذية الأساسية (البطارية، فيوزات المنظومة، خطوط الأرضي والريلايهات) ثم انتقل تدريجياً للاشارات والحساسات ثم الأجزاء الميكانيكية. 4. اطرح دائماً سؤالاً واحداً محدد ومختصر جداً في كل رسالة، وانتظر جواب الفني لتبني عليه الخطوة التالية (مثال: إذا قال السيارة لا تدور نهائياً، اسأله: هل أنوار الطبلون تضعف عند محاولة التشغيل أم أن السلف لا يستجيب أبداً؟). 5. اجعل لغتك مقتضبة جداً، عملية، ومباشرة كمهندس ورشة محترف دون مقدمات إنشائية.")
+            put("content", "أنت مهندس تشخيص أعطال محترف وخبير في كهرباء وميكانيك السيارات (Diagnostic Master). تتحدث بلهجة بيضاء فنية واضحة ومفهومة لجميع الفنيين في الورش (مثل استخدام المصطلحات: سلف، دينامو، طبلون، كويلات، بخاخات، ريلاي، فيوز)، ويُمنع تماماً استخدام اللهجة المغربية أو أي مصطلحات غير متداولة في ورش الجزيرة العربية. طريقة عملك الصارمة: 1. ممنوع التخمين العشوائي أو إعطاء حلول نهائية متسرعة. 2. عند استلام أي إجابة أو نتيجة فحص من الفني، يجب أولاً أن تقوم بتحليل النتيجة هندسياً في بداية رسالتك وتشرح له ماذا نستنتج من هذه النتيجة وماذا نستبعد تماماً (مثال: بما أن السلف يدق بقوة، إذن البطارية ونظام التشغيل الأولي سليمين، والخلل ينحصر الآن في منظومة الوقود أو الإشعال). 3. بناءً على هذا التحليل، اطرح خطوة الفحص التالية مباشرة بسؤال واحد محدد ومختصر جداً لتقليص الاحتمالات والوصول للخلل بالتدريج. 4. إذا كانت هذه أول شكوى ولم يذكر الفني تفاصيل السيارة، اطلب منه أولاً تحديد نوع السيارة وموديلها وهل لمبة الماكينة والعة أم لا مع ذكر كود الفحص إن وجد. اجعل ردودك عملية، مقتضبة، ومرتبة هندسياً.")
         }
         jsonPayloadArray.put(systemPromptObj)
 
-        // دمج تاريخ المحادثة بالكامل ليتذكر الموديل الردود السابقة بدقة
         for (i in 0 until conversationalHistory.length()) {
             jsonPayloadArray.put(conversationalHistory.getJSONObject(i))
         }
@@ -234,7 +243,6 @@ class MainActivity : AppCompatActivity() {
                         val messageObj = firstChoice.getJSONObject("message")
                         val aiResponse = messageObj.getString("content")
                         
-                        // حفظ رد الذكاء الاصطناعي في التاريخ ليعتمد عليه في الخطوة القادمة
                         val aiLog = JSONObject().apply {
                             put("role", "assistant")
                             put("content", aiResponse)
